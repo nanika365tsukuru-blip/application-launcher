@@ -1,6 +1,5 @@
 # アプリケーションランチャー
 
-![Application Launcher](./Luncher_ico.png)
 
 カテゴリ分けが可能なシンプルで効率的なWindowsアプリケーションランチャーです。
 
@@ -30,30 +29,6 @@
 - Python 3.7以上
 - Windows OS
 
-### インストール方法
-
-1. **リポジトリをクローン**
-   ```bash
-   git clone https://github.com/yourusername/application-launcher.git
-   cd application-launcher
-   ```
-
-2. **依存関係をインストール**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **アプリケーションを実行**
-   ```bash
-   python Launcher_main.py
-   ```
-
-### 簡単セットアップ (Windows)
-```bash
-# セットアップバッチファイルを実行
-setup.bat
-```
-
 ## 📖 使い方
 
 ### アプリケーションの追加
@@ -78,31 +53,6 @@ setup.bat
 - 最大10世代の自動バックアップから選択
 - 保存前にデータが自動バックアップされます
 
-## 🏗️ プロジェクト構成
-
-```
-application-launcher/
-├── Launcher_main.py           # メインアプリケーションファイル
-├── requirements.txt           # Python依存関係
-├── setup.bat                 # Windowsセットアップスクリプト
-├── Luncher_ico.ico           # アプリケーションアイコン
-├── Luncher_ico.png           # アイコン画像
-├── launcher.bat              # 起動スクリプト
-├── README.md                 # 英語版README
-├── README_ja.md              # 日本語版README（このファイル）
-└── .gitignore                # Git除外設定
-```
-
-## 🔧 設定
-
-### データ保存場所
-- **Windows**: `~/.launcher/launcher_data.json`
-- **バックアップ**: `~/.launcher/launcher_data.json.bak1` から `.bak10`
-
-### サポートファイルタイプ
-- **Python**: `.py`, `.pyw`
-- **実行ファイル**: `.exe`, `.bat`, `.cmd`
-- **その他**: システムデフォルトで開きます
 
 ## 🛠️ 技術詳細
 
@@ -112,40 +62,6 @@ application-launcher/
 - **バックアップシステム**: 自動10世代ローテーション
 - **プラットフォーム**: Windows（クロスプラットフォーム対応可能）
 
-## 🤝 貢献方法
-
-1. リポジトリをフォーク
-2. 機能ブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成
-
-## 📝 ライセンス
-
-このプロジェクトはMITライセンスの下でライセンスされています。詳細は [LICENSE](LICENSE) ファイルをご覧ください。
-
-## 🐛 問題・サポート
-
-問題が発生した場合や提案がある場合：
-1. 既存の [Issues](https://github.com/yourusername/application-launcher/issues) を確認
-2. 詳細な説明付きで新しいissueを作成
-3. Pythonバージョンとお使いのOS詳細を含めてください
-
-## 🔮 ロードマップ
-
-- [ ] ランチャーアクセス用ホットキーサポート
-- [ ] アプリケーションアイコン表示
-- [ ] テーマカスタマイズ
-- [ ] 設定のエクスポート/インポート
-- [ ] クロスプラットフォームサポート（macOS、Linux）
-- [ ] カスタムアクション用プラグインシステム
-
-## 📚 関連プロジェクト
-
-このランチャーは、以下と比較してより良いアプリケーション整理の必要性にインスパイアされました：
-- Windowsスタートメニュー（限定的なカテゴリ分け）
-- デスクトップショートカット（視覚的混乱）
-- サードパーティランチャー（多くの場合複雑すぎる）
 
 ## 💡 なぜこのランチャー？
 
