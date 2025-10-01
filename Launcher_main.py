@@ -8,8 +8,8 @@ import subprocess
 from dataclasses import dataclass, asdict
 from typing import List, Optional
 
-from PySide6.QtCore import Qt, QSize, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QSize, Signal, QRect, QPoint
+from PySide6.QtGui import QFont, QPainter, QPen, QColor, QPixmap, QDrag
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -172,12 +172,12 @@ class EntryWidget(QWidget):
         super().__init__(parent)
         self.entry = entry
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 4, 6, 4)  # 左マージンを18pxに増加して字下げ
+        layout.setContentsMargins(18, 2, 6, 2)  # 上下マージンを2pxに縮小
         layout.setSpacing(6)
 
         text_box = QVBoxLayout()
         text_box.setContentsMargins(0, 0, 0, 0)
-        text_box.setSpacing(2)
+        text_box.setSpacing(1)  # テキスト間のスペースを縮小
 
         self.name_label = QLabel(entry.name)
         font = QFont()
@@ -222,7 +222,7 @@ class EntryWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def sizeHint(self) -> QSize:  # ensure compact height
-        return QSize(180, 48)
+        return QSize(180, 40)  # 高さを48から40に縮小
 
 
 class SeparatorWidget(QWidget):
@@ -230,7 +230,7 @@ class SeparatorWidget(QWidget):
         super().__init__(parent)
         self.entry = entry
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 10, 6, 10)
+        layout.setContentsMargins(6, 6, 6, 6)  # 上下マージンを10から6に縮小
         layout.setSpacing(2)
 
         self.name_label = QLabel(entry.name)
@@ -238,13 +238,13 @@ class SeparatorWidget(QWidget):
         font.setBold(True)
         self.name_label.setFont(font)
         self.name_label.setAlignment(Qt.AlignCenter)
-        self.name_label.setStyleSheet("color: #666666; background-color: #f0f0f0; padding: 8px; border-radius: 3px; min-height: 16px;")
+        self.name_label.setStyleSheet("color: #666666; background-color: #f0f0f0; padding: 4px; border-radius: 3px; min-height: 12px;")  # パディングと高さを縮小
 
         layout.addWidget(self.name_label)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def sizeHint(self) -> QSize:
-        return QSize(180, 46)
+        return QSize(180, 34)  # 高さを46から34に縮小
 
 
 class LauncherListWidget(QListWidget):
@@ -258,28 +258,114 @@ class LauncherListWidget(QListWidget):
         self.setDragDropMode(QListWidget.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
         self.setSelectionMode(QListWidget.SingleSelection)
-        self.setSpacing(2)
+        self.setSpacing(1)  # アイテム間のスペースを2から1に縮小
 
-        # カスタムドラッグ&ドロップ用
-        self._drag_start_row = None
-        self._drag_item_id = None
+        # Enable drop indicator line
+        self.setDropIndicatorShown(True)
 
-        # Save order when internal rows moved
-        try:
-            self.model().rowsMoved.connect(lambda parent, start, end, dest, row: self._on_rows_moved(parent, start, end, dest, row))
-        except Exception:
-            pass
+        # Set selection highlight color and drop indicator style
+        self.setStyleSheet("""
+            QListWidget::item:selected {
+                background-color: #2B5A8C;
+                color: white;
+            }
+            QListWidget::item:selected:!active {
+                background-color: #4A7AAD;
+                color: white;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(100, 200, 255, 40);
+                border: 1px solid rgba(150, 220, 255, 100);
+            }
+            QListWidget::indicator {
+                background-color: #FF6B6B;
+                height: 3px;
+            }
+        """)
 
-    def _on_rows_moved(self, parent, start, end, dest, row):
-        self.orderChanged.emit()
+        # Track if we're in internal drag operation
+        self._is_internal_drag = False
+        self._drop_indicator_rect = QRect()
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            item = self.itemAt(event.pos())
-            if item:
-                self._drag_start_row = self.row(item)
-                self._drag_item_id = item.data(Qt.UserRole)
-        super().mousePressEvent(event)
+    def startDrag(self, supportedActions):
+        self._is_internal_drag = True
+
+        # Create custom drag pixmap with black transparency
+        selected_items = self.selectedItems()
+        if selected_items:
+            item = selected_items[0]
+            widget = self.itemWidget(item)
+            if widget:
+                # Create a pixmap of the widget (scaled down to 80% to see below)
+                original_size = widget.size()
+                scaled_size = QSize(int(original_size.width() * 0.8), int(original_size.height() * 0.8))
+
+                pixmap = QPixmap(original_size)
+                pixmap.fill(Qt.transparent)
+                widget.render(pixmap)
+
+                # Scale down the pixmap
+                scaled_pixmap = pixmap.scaled(scaled_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+                # Create a semi-transparent black overlay
+                overlay = QPixmap(scaled_size)
+                overlay.fill(QColor(0, 0, 0, 20))  # Black with 20/255 opacity (much lighter)
+
+                # Combine original pixmap with black overlay
+                painter = QPainter(scaled_pixmap)
+                painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+                painter.drawPixmap(0, 0, overlay)
+                painter.end()
+
+                # Create drag object and set custom pixmap
+                drag = QDrag(self)
+                drag.setMimeData(self.model().mimeData(self.selectedIndexes()))
+                drag.setPixmap(scaled_pixmap)
+                drag.setHotSpot(QPoint(scaled_pixmap.width() // 2, scaled_pixmap.height() // 2))
+
+                # Execute drag
+                drag.exec(Qt.MoveAction)
+
+                # Clean up after drag
+                self._drop_indicator_rect = QRect()
+                for i in range(self.count()):
+                    item = self.item(i)
+                    widget = self.itemWidget(item)
+                    if widget:
+                        widget.setStyleSheet("")
+                self._is_internal_drag = False
+                self.viewport().update()
+                self.orderChanged.emit()
+                return
+
+        super().startDrag(supportedActions)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        # Draw futuristic glowing drop indicator line
+        if self._is_internal_drag and not self._drop_indicator_rect.isNull():
+            painter = QPainter(self.viewport())
+            painter.setRenderHint(QPainter.Antialiasing)
+
+            # Draw glowing effect with multiple layers
+            y = self._drop_indicator_rect.top()
+            left = self._drop_indicator_rect.left()
+            right = self._drop_indicator_rect.right()
+
+            # Outer glow (wider, more transparent)
+            pen = QPen(QColor(100, 200, 255, 60), 6)
+            painter.setPen(pen)
+            painter.drawLine(left, y, right, y)
+
+            # Middle glow
+            pen = QPen(QColor(150, 220, 255, 120), 3)
+            painter.setPen(pen)
+            painter.drawLine(left, y, right, y)
+
+            # Inner bright line
+            pen = QPen(QColor(200, 240, 255, 255), 1)
+            painter.setPen(pen)
+            painter.drawLine(left, y, right, y)
 
     def dragEnterEvent(self, event):
         if event.source() is self:
@@ -296,25 +382,48 @@ class LauncherListWidget(QListWidget):
             # 内部ドラッグでは必ずMoveActionを使用
             event.setDropAction(Qt.MoveAction)
             event.accept()
+
+            # Update drop indicator position
+            item = self.itemAt(event.pos())
+            if item:
+                rect = self.visualItemRect(item)
+                # Determine if we should drop above or below the item
+                if event.pos().y() < rect.center().y():
+                    # Drop above
+                    self._drop_indicator_rect = QRect(rect.left(), rect.top(), rect.width(), 1)
+                else:
+                    # Drop below
+                    self._drop_indicator_rect = QRect(rect.left(), rect.bottom(), rect.width(), 1)
+            else:
+                # Drop at the end
+                if self.count() > 0:
+                    last_item = self.item(self.count() - 1)
+                    rect = self.visualItemRect(last_item)
+                    self._drop_indicator_rect = QRect(rect.left(), rect.bottom(), rect.width(), 1)
+
+            self.viewport().update()
         else:
             super().dragMoveEvent(event)
 
     def dropEvent(self, event):
         if event.source() is self:
-            # カウント確認用
-            count_before = self.count()
-
             # Qt標準処理を実行してドラッグ機能を有効にする
             super().dropEvent(event)
 
-            count_after = self.count()
+            # Clear drop indicator
+            self._drop_indicator_rect = QRect()
 
-            # アイテム数が減少した場合はリストを強制リフレッシュ
-            if count_after < count_before:
-                # orderChangedシグナルを発火してリフレッシュを促す
-                self.orderChanged.emit()
-            else:
-                self.orderChanged.emit()
+            # Restore visual appearance of all items
+            for i in range(self.count()):
+                item = self.item(i)
+                widget = self.itemWidget(item)
+                if widget:
+                    widget.setStyleSheet("")
+
+            self._is_internal_drag = False
+            self.viewport().update()
+            # Emit orderChanged after internal drag & drop
+            self.orderChanged.emit()
             return
 
         md = event.mimeData()
@@ -329,6 +438,19 @@ class LauncherListWidget(QListWidget):
                 event.acceptProposedAction()
                 return
         super().dropEvent(event)
+
+    def dragLeaveEvent(self, event):
+        # Restore visual appearance if drag is cancelled
+        if self._is_internal_drag:
+            self._drop_indicator_rect = QRect()
+            for i in range(self.count()):
+                item = self.item(i)
+                widget = self.itemWidget(item)
+                if widget:
+                    widget.setStyleSheet("")
+            self._is_internal_drag = False
+            self.viewport().update()
+        super().dragLeaveEvent(event)
 
 
 class EntryDialog(QDialog):
@@ -441,10 +563,9 @@ class EntryDialog(QDialog):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Application Launcher")
-        # Default size: H=860, W=200
-        self.resize(200, 860)
-        self.setMinimumWidth(180)
+        self.setWindowTitle("Launcher")
+        self.setMinimumWidth(250)
+        self.resize(250, 930)
 
         self.entries: List[LauncherEntry] = load_entries()
 
@@ -597,26 +718,29 @@ class MainWindow(QMainWindow):
                 if eid:
                     ordered_ids.append(eid)
 
-        # Check if we're missing any entries
+        # Validation checks
         original_ids = {e.id for e in self.entries}
         ordered_ids_set = set(ordered_ids)
-        missing_ids = original_ids - ordered_ids_set
 
-        if missing_ids:
-            # UIアイテムが欠損している場合、リストを再構築
+        # Check for missing entries or duplicate IDs
+        if original_ids != ordered_ids_set or len(ordered_ids) != len(ordered_ids_set):
+            # Data inconsistency detected, refresh list
             self._refresh_list()
             return
 
-        if len(ordered_ids) != len(ordered_ids_set):
-            return
-
+        # Reorder entries based on UI order
         id_to_entry = {e.id: e for e in self.entries}
-        new_entries = [id_to_entry[eid] for eid in ordered_ids if eid in id_to_entry]
+        new_entries = [id_to_entry[eid] for eid in ordered_ids]
 
-        # Only save if we have the same number of entries
-        if len(new_entries) == len(self.entries):
-            self.entries = new_entries
+        # Save the new order
+        self.entries = new_entries
+        try:
             save_entries(self.entries)
+        except Exception as e:
+            QMessageBox.warning(self, "保存エラー", f"並び順の保存に失敗しました:\n{e}")
+            # Reload entries from disk to maintain consistency
+            self.entries = load_entries()
+            self._refresh_list()
 
     # ----- Run
 
@@ -682,15 +806,29 @@ class MainWindow(QMainWindow):
         try:
             if ext in (".py", ".pyw"):
                 # 新しいCMDウィンドウでPythonスクリプトを実行
-                cmd = f'start "Python: {entry.name}" cmd /k "cd /d "{cwd}" && python "{path}" && pause"'
-                subprocess.Popen(cmd, shell=True)
+                # Use list format to avoid shell injection
+                if cwd:
+                    subprocess.Popen(
+                        ["cmd", "/k", f"cd /d {cwd} && python \"{path}\" && pause"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith("win") else 0
+                    )
+                else:
+                    subprocess.Popen(
+                        ["cmd", "/k", f"python \"{path}\" && pause"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith("win") else 0
+                    )
             elif ext in (".exe", ".bat", ".cmd"):
                 # 新しいCMDウィンドウで実行ファイルを実行
                 if cwd:
-                    cmd = f'start "{entry.name}" cmd /k "cd /d "{cwd}" && "{path}" && pause"'
+                    subprocess.Popen(
+                        ["cmd", "/k", f"cd /d {cwd} && \"{path}\" && pause"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith("win") else 0
+                    )
                 else:
-                    cmd = f'start "{entry.name}" cmd /k ""{path}" && pause"'
-                subprocess.Popen(cmd, shell=True)
+                    subprocess.Popen(
+                        ["cmd", "/k", f"\"{path}\" && pause"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith("win") else 0
+                    )
             else:
                 # その他のファイルはシステムデフォルトで開く
                 if sys.platform.startswith("win"):
@@ -708,9 +846,11 @@ def main():
         import codecs
         try:
             # コンソールのエンコーディングをUTF-8に設定
-            sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
-            sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
-        except:
+            if hasattr(sys.stdout, 'detach'):
+                sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+            if hasattr(sys.stderr, 'detach'):
+                sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+        except Exception:
             pass
 
     # Windows環境でコンソールウィンドウを非表示にする
@@ -718,13 +858,13 @@ def main():
         import os
         if os.name == 'nt':
             import ctypes
-            ctypes.windll.kernel32.FreeConsole()
+            try:
+                ctypes.windll.kernel32.FreeConsole()
+            except Exception:
+                pass
 
     app = QApplication(sys.argv)
     w = MainWindow()
-    # Keep narrow footprint; allow resizing vertically, width small
-    w.setMinimumWidth(250)
-    w.resize(250, 930)
     w.show()
     sys.exit(app.exec())
 
